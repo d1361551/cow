@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>台中美食評價系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        input, textarea, button {
+            font-size: 16px;
+        }
+        #searchInput, #newPlaceInput {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #placeList {
+            list-style: none;
+            padding: 0;
+        }
+        #placeList li {
+            padding: 8px;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #placeList li:hover {
+            background-color: #f0f0f0;
+        }
+        .deleteBtn {
+            background-color: red;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+        .deleteBtn:hover {
+            background-color: darkred;
+        }
+        .addBtn {
+            background-color: green;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .addBtn:hover {
+            background-color: darkgreen;
+        }
+        #infoPanel {
+            margin-top: 20px;
+            display: none;
+        }
+        #reviewList {
+            margin-top: 20px;
+            list-style: none;
+            padding: 0;
+        }
+        #reviewList li {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4caf50;
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        .thumbnail {
+            max-width: 100px;
+            max-height: 100px;
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🍱 台中美食評價系統</h1>
+
+    <input type="text" id="searchInput" placeholder="🔍 搜尋店名..." oninput="filterPlaces()">
+
+    <input type="text" id="newPlaceInput" placeholder="➕ 新增餐廳名稱...">
+    <button class="addBtn" onclick="addPlace()">新增餐廳</button>
+
+    <ul id="placeList"></ul>
+
+    <div id="infoPanel">
+        <h2 id="selectedPlaceName"></h2>
+        <label for="rating">評分 (1~5)：</label>
+        <input type="number" id="rating" min="1" max="5"><br><br>
+
+        <label for="review">心得記錄：</label><br>
+        <textarea id="review" rows="4" cols="50"></textarea><br><br>
+
+        <label for="image">上傳照片：</label>
+        <input type="file" id="image"><br><br>
+
+        <button onclick="saveReview()">儲存紀錄</button>
+    </div>
+
+    <hr>
+    <h2>📖 評價紀錄</h2>
+    <ul id="reviewList"></ul>
+
+    <script>
+        let places = [];
+        let selectedPlace = null;
+        let savedReviews = JSON.parse(localStorage.getItem("reviews")) || [];
+
+        function highlightText(text, keyword) {
+            if (!keyword) return text;
+            const regex = new RegExp(`(${keyword})`, "gi");
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+
+        function displayPlaces(list) {
+            const listEl = document.getElementById("placeList");
+            listEl.innerHTML = "";
+            const keyword = document.getElementById("searchInput").value.toLowerCase();
+
+            list.forEach((place, index) => {
+                const li = document.createElement("li");
+
+                const nameSpan = document.createElement("span");
+                nameSpan.innerHTML = highlightText(place, keyword);
+                nameSpan.style.flexGrow = "1";
+                nameSpan.style.cursor = "pointer";
+                nameSpan.onclick = () => selectPlace(place);
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.textContent = "刪除";
+                deleteBtn.className = "deleteBtn";
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deletePlace(place);
+                };
+
+                li.appendChild(nameSpan);
+                li.appendChild(deleteBtn);
+                listEl.appendChild(li);
+            });
+        }
+
+        function filterPlaces() {
+            const keyword = document.getElementById("searchInput").value.toLowerCase();
+            const filtered = places.filter(name => name.toLowerCase().includes(keyword));
+            displayPlaces(filtered);
+        }
+
+        function selectPlace(name) {
+            selectedPlace = name;
+            document.getElementById("selectedPlaceName").textContent = `📍 ${name}`;
+            document.getElementById("infoPanel").style.display = "block";
+            document.getElementById("rating").value = "";
+            document.getElementById("review").value = "";
+            document.getElementById("image").value = "";
+        }
+
+        function saveReview() {
+            const rating = document.getElementById("rating").value;
+            const review = document.getElementById("review").value;
+            const imageInput = document.getElementById("image");
+            const imageFile = imageInput.files[0];
+
+            if (!selectedPlace || !rating || !review) {
+                alert("請輸入完整的評分與心得！");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function () {
+                const imageData = imageFile ? reader.result : null;
+                savedReviews.push({
+                    name: selectedPlace,
+                    rating: parseFloat(rating),
+                    review: review,
+                    image: imageData
+                });
+
+                localStorage.setItem("reviews", JSON.stringify(savedReviews));
+                renderReviews();
+                updatePlacesFromReviews();
+
+                alert(`✅ 已儲存\n店家：${selectedPlace}\n評分：${rating}\n心得：${review}`);
+
+                document.getElementById("rating").value = "";
+                document.getElementById("review").value = "";
+                document.getElementById("image").value = "";
+                document.getElementById("infoPanel").style.display = "none";
+            };
+
+            if (imageFile) {
+                reader.readAsDataURL(imageFile);
+            } else {
+                reader.onload();
+            }
+        }
+
+        function deletePlace(name) {
+            if (confirm(`你確定要刪除「${name}」嗎？`)) {
+                savedReviews = savedReviews.filter(r => r.name !== name);
+                localStorage.setItem("reviews", JSON.stringify(savedReviews));
+                updatePlacesFromReviews();
+                renderReviews();
+                document.getElementById("infoPanel").style.display = "none";
+            }
+        }
+
+        function addPlace() {
+            const newName = document.getElementById("newPlaceInput").value.trim();
+            if (newName === "") {
+                alert("請輸入餐廳名稱！");
+                return;
+            }
+            if (places.includes(newName)) {
+                alert("此餐廳已存在！");
+                return;
+            }
+            places.push(newName);
+            document.getElementById("newPlaceInput").value = "";
+            filterPlaces();
+        }
+
+        function renderReviews() {
+            const reviewList = document.getElementById("reviewList");
+            reviewList.innerHTML = "";
+
+            const grouped = {};
+            savedReviews.forEach(r => {
+                if (!grouped[r.name]) grouped[r.name] = [];
+                grouped[r.name].push(r);
+            });
+
+            for (let name in grouped) {
+                const reviews = grouped[name];
+                const avg = (
+                    reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+                ).toFixed(1);
+
+                const header = document.createElement("li");
+                header.innerHTML = `<strong>🍴 ${name}｜平均評分：${avg}</strong>`;
+                reviewList.appendChild(header);
+
+                reviews.forEach((r, index) => {
+                    const li = document.createElement("li");
+                    li.innerHTML = `⭐ 評分：${r.rating}｜心得：${r.review}`;
+
+                    if (r.image) {
+                        const img = document.createElement("img");
+                        img.src = r.image;
+                        img.className = "thumbnail";
+                        li.appendChild(img);
+                    }
+
+                    const delBtn = document.createElement("button");
+                    delBtn.textContent = "刪除";
+                    delBtn.style.marginLeft = "10px";
+                    delBtn.onclick = () => {
+                        const idx = savedReviews.indexOf(r);
+                        savedReviews.splice(idx, 1);
+                        localStorage.setItem("reviews", JSON.stringify(savedReviews));
+                        renderReviews();
+                        updatePlacesFromReviews();
+                    };
+
+                    li.appendChild(delBtn);
+                    reviewList.appendChild(li);
+                });
+            }
+        }
+
+        function updatePlacesFromReviews() {
+            const restaurantSet = new Set(savedReviews.map(r => r.name));
+            places = Array.from(restaurantSet);
+            filterPlaces();
+        }
+
+        // 初始化
+        updatePlacesFromReviews();
+        renderReviews();
+    </script>
+</body>
+</html>
